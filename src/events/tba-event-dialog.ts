@@ -12,6 +12,7 @@ export class TbaEventDialog {
   customIsLoading = false;
   events: any[];
   games: IGame[];
+  years: string[];
 
   constructor(
     private dbContext: FrcStatsContext,
@@ -23,9 +24,13 @@ export class TbaEventDialog {
   activate() {
     this.controller.settings.lock = false;
     this.controller.settings.overlayDismiss = true;
-
+    
     this.games = gameManager.getGames();
     this.yearChanged();
+    this.years = [];
+    this.games[0].gameCode;
+    this.years = this.games.map(function(x){return(x.gameCode)});
+    this.years.sort();
 
     this.load();
   }

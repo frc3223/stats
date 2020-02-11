@@ -5,6 +5,7 @@ export class FrcStatsContext extends Dexie {
   teamMatches2018: Dexie.Table<TeamMatch2018Entity, number>;
   teamMatches2018V2: Dexie.Table<TeamMatch2018V2Entity, number>;
   teamMatches2019: Dexie.Table<TeamMatch2019Entity, number>;
+  teamMatches2020: Dexie.Table<TeamMatch2020Entity, number>;
   teams: Dexie.Table<TeamEntity, number>;
   districts: Dexie.Table<DistrictEntity, number>;
   events: Dexie.Table<EventEntity, number>;
@@ -53,6 +54,12 @@ export class FrcStatsContext extends Dexie {
       // noop
     });
 
+    this.version(6).stores({
+      teamMatches2020: '++id, eventCode, teamNumber, matchNumber, [eventCode+matchNumber], [eventCode+teamNumber], &[eventCode+teamNumber+matchNumber]'
+    }).upgrade(() => {
+      // noop
+    });
+
     this.games.put({
       year: '2018',
       name: 'FIRST POWER UP',
@@ -67,6 +74,17 @@ export class FrcStatsContext extends Dexie {
     this.games.put({
       year: '2019',
       name: 'FIRST DEEP SPACE',
+    }).catch(error => {
+      if(error.name == 'ConstraintError') {
+        // u weird, chrome
+        return;
+      }
+      throw error;
+    });
+
+    this.games.put({
+      year: '2020',
+      name: 'FIRST INFINITE RECHARGE',
     }).catch(error => {
       if(error.name == 'ConstraintError') {
         // u weird, chrome
@@ -168,6 +186,29 @@ export class FrcStatsContext extends Dexie {
         .toArray();
     }else{
       return this.teamMatches2019
+        .where("eventCode")
+        .equals(opts.eventCode).toArray();
+    }
+  }
+
+  getTeamMatches2020(opts: TeamMatchOpts): Promise<TeamMatch2020Entity[]> {
+    if('teamNumber' in opts && 'matchNumber' in opts) {
+      return this.teamMatches2020
+      .where(["eventCode", "teamNumber", "matchNumber"])
+      .equals([opts.eventCode, opts.teamNumber, opts.matchNumber])
+      .toArray();
+    }else if('teamNumber' in opts && !('matchNumber' in opts)) {
+      return this.teamMatches2020
+      .where(["eventCode", "teamNumber"])
+      .equals([opts.eventCode, opts.teamNumber])
+      .toArray();
+    }else if('matchNumber' in opts) {
+      return this.teamMatches2020
+        .where(["eventCode", "matchNumber"])
+        .equals([opts.eventCode, opts.matchNumber])
+        .toArray();
+    }else{
+      return this.teamMatches2020
         .where("eventCode")
         .equals(opts.eventCode).toArray();
     }
@@ -375,6 +416,59 @@ export var qualitativeAnswers : QualitativeAnswer[] = [
   { numeric: 40, name: "Excellent"}
 ]
 
+export interface TeamMatch2020Entity extends IEventTeamMatch {
+  id?: number;
+  /**AUTONOMUS */
+  /**Determines where  the robot will be starting on the field */
+  startingPosition: string;
+  /**Determines if a robot successfully got the lowest point value in auto */
+  autoCrossedLine: boolean;
+  /*Determines where a robot shot a ball in auto */
+  autoHighGoal: number;
+  autoHighInnerGoal: number;
+  autoLowGoal: number;
+  /**Determines if a robot did nothing the entire match */
+  deadOnField: boolean;
+  /**Determines if a robot spun out of control on the field */
+  spinnyBois: boolean;
+  /**TELEOPERATED */
+  powerCellPickup: QualitativeNumeric;
+  /**Determines if the control panel was attempted */
+  controlPanelAttempted: boolean;
+  /**Determines if the control panel attempt was successful */
+  controlPanelSucceeded: boolean;
+  /**Remaining number of seconds at the start of the control panel attempt */
+  controlPanelBegin: number;
+  /**Remaining number of seconds at the end of the control panel attempt */
+  controlPanelEnd: number;
+  /**END GAME */
+  /**Determines whether or not the robot attempted to climb*/
+  climbAttempted: boolean;
+  /**Determines whether or not the robot successfully climbed */
+  climbSucceeded: boolean;
+  /**Remaining number of seconds at the start of the climb attempt */
+  climbBegin: number;
+  /**Remaining number of seconds at the end of the climb attempt */
+  climbEnd: number;
+  /**Stores the team numbers of the robots lifted by this robot to the third level of the pedestal. */
+  lifted: string[];
+  liftedSomeone: boolean;
+  /**Determines whether or not a robot failure occurred. */
+  /**NOTES AND MESALANIOUS */
+  isFailure: boolean;
+  /**A more descriptive version of isFailure. */
+  failureReason: string;
+  /**Determines whether or not the robot or drive team caused a foul. */
+  isFoul: boolean;
+  /**A more descriptive version of isFoul. */
+  foulReason: string;
+  /**Anything deemed important by the user. */
+  notes: string;
+  /**Rating of defensive capability. */
+  defenseCapability: QualitativeNumeric;
+  defenseWeaknesses: string;
+}
+
 export function make2018match(eventCode, teamNumber, matchNumber): TeamMatch2018Entity {
   return {
     autoScaleCount: 0,
@@ -474,6 +568,46 @@ export function make2019match(eventCode: string, teamNumber: string, matchNumber
   };
 }
 
+export function make2020match(eventCode: string, teamNumber: string, matchNumber: string): TeamMatch2020Entity {
+  return {
+    eventCode: eventCode,
+    teamNumber: teamNumber,
+    matchNumber: matchNumber,
+    
+    /**AUTONOMUS */
+    startingPosition: null,
+    autoCrossedLine: false,
+    autoHighGoal: 0,
+    autoHighInnerGoal: 0,
+    autoLowGoal: 0,
+
+    /**TELEOPERATED */
+    deadOnField: false,
+    spinnyBois: false,
+    powerCellPickup: 0,
+    controlPanelAttempted: false,
+    controlPanelSucceeded: false,
+    controlPanelBegin: 0,
+    controlPanelEnd: 0,
+
+    /**END GAME */
+    climbAttempted: false,
+    climbSucceeded: false,
+    climbBegin: 0,
+    climbEnd: 0,
+    lifted: [],
+    liftedSomeone: false,
+    isFailure: false,
+    failureReason: null,
+    isFoul: false,
+    foulReason: null,
+    notes: null,
+    defenseCapability: 0,
+    defenseWeaknesses: null,
+  }
+}
+
+
 export function matches2018AreEqual(a: TeamMatch2018Entity, b: TeamMatch2018Entity) {
   if(a == null && b != null || a != null && b == null) return false;
   return (
@@ -564,6 +698,26 @@ export function matches2019AreEqual(a: TeamMatch2019Entity, b: TeamMatch2019Enti
     a.notes == b.notes &&
     a.liftedBy == b.liftedBy
   );
+}
+
+export function matches2020AreEqual(a: TeamMatch2020Entity, b: TeamMatch2020Entity) {
+  if(a == null && b != null || a != null && b == null) return false;
+
+  return (
+    a.eventCode == b.eventCode &&
+    a.teamNumber == b.teamNumber &&
+    a.matchNumber == b.matchNumber &&
+    a.climbAttempted == b.climbAttempted &&
+    a.climbSucceeded == b.climbSucceeded &&
+    a.climbBegin == b.climbBegin &&
+    a.climbEnd == b.climbEnd &&
+    liftedAreEqual(a.lifted, b.lifted) &&
+    a.isFailure == b.isFailure &&
+    a.failureReason == b.failureReason &&
+    a.isFoul == b.isFoul &&
+    a.foulReason == b.foulReason &&
+    a.notes == b.notes
+  )
 }
 
 export function liftedAreEqual(lifted1: string[], lifted2: string[]) {

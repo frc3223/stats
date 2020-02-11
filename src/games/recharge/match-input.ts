@@ -2,7 +2,7 @@ import { autoinject } from "aurelia-framework";
 import { BootstrapRenderer } from "../../utilities/bootstrap-renderer";
 import * as naturalSort from "javascript-natural-sort";
 import { ValidationController, ValidationControllerFactory, ValidationRules } from "aurelia-validation";
-import { TeamMatch2019Entity, TeamEntity, EventEntity, EventMatchEntity, FrcStatsContext, make2019match, EventMatchSlots, DeepSpaceEvent, qualitativeAnswers, allDeepSpaceLocations, allDeepSpaceGamepieceTypes, DeepSpaceGamepiece } from "../../persistence";
+import { TeamMatch2020Entity, TeamEntity, EventEntity, EventMatchEntity, FrcStatsContext, make2020match, EventMatchSlots, qualitativeAnswers} from "../../persistence";
 import { Disposable, BindingEngine, DirtyCheckProperty } from "aurelia-binding";
 import { DialogService } from "aurelia-dialog";
 import { Router } from "aurelia-router";
@@ -12,7 +12,7 @@ import { DeepSpaceBingoDialog } from "./deepspace-bingo";
 import { QrCodeDisplayDialog } from "../../qrcodes/display-dialog";
 import { cloneDeep } from "lodash";
 import { nextMatchNumber, previousMatchNumber } from "../../model";
-import { setupValidationRules, placementTime, PlacementMergeState } from "./model";
+import { setupValidationRules, placementTime } from "./model";
 import { SaveDialog } from "../../utilities/save-dialog";
 import { equals } from "../../utilities/dirty-change-checker";
 import { SettingsDialog } from "./settings-dialog";
@@ -20,8 +20,8 @@ import { TimeRemaining } from "../../utilities/time-remaining";
 
 @autoinject
 export class MatchInputPage {
-  public model: TeamMatch2019Entity;
-  public pristineModel: TeamMatch2019Entity;
+  public model: TeamMatch2020Entity;
+  public pristineModel: TeamMatch2020Entity;
   public team: TeamEntity;
   public event: EventEntity;
   public eventMatch: EventMatchEntity;
@@ -36,8 +36,6 @@ export class MatchInputPage {
   public hasNextMatch = false;
   public hasPreviousMatch = false;
   public qualifiedAnswers = qualitativeAnswers;
-  public locationArray = allDeepSpaceLocations;
-  public gamepieceArray = allDeepSpaceGamepieceTypes;
   public maxWhen = 135;
   public hasSaved: boolean;
   public slots: any;
@@ -57,7 +55,6 @@ export class MatchInputPage {
   timerIntervalId: NodeJS.Timer;
 
   public rules: any[];
-  public placementRules: any[];
   public validationController: ValidationController;
   private renderer: BootstrapRenderer;
   private observers: Disposable[];
@@ -119,13 +116,8 @@ export class MatchInputPage {
 
   private observeModel() {
     this.observers.push(this.bindingEngine.propertyObserver(this.model, 'level3ClimbAttempted').subscribe(() => {
-      if (!this.model.level3ClimbAttempted) {
-        this.model.level3ClimbSucceeded = false;
-      }
-    }));
-    this.observers.push(this.bindingEngine.propertyObserver(this.model, 'level2ClimbAttempted').subscribe(() => {
-      if (!this.model.level2ClimbAttempted) {
-        this.model.level2ClimbSucceeded = false;
+      if (!this.model.climbAttempted) {
+        this.model.climbSucceeded = false;
       }
     }));
   }
@@ -138,13 +130,13 @@ export class MatchInputPage {
   }
 
   public async load(params) {
-    let matches = await this.dbContext.getTeamMatches2019({
+    let matches = await this.dbContext.getTeamMatches2020({
       eventCode: params.eventCode,
       teamNumber: params.teamNumber,
       matchNumber: params.matchNumber,
     });
     if (matches.length == 0) {
-      this.model = make2019match(params.eventCode, params.teamNumber, params.matchNumber);
+      this.model = make2020match(params.eventCode, params.teamNumber, params.matchNumber);
     } else {
       this.model = matches[0];
     }
@@ -212,8 +204,6 @@ export class MatchInputPage {
   public setupValidation() {
     let allRules = setupValidationRules();
     this.rules = allRules.rules;
-    this.placementRules = allRules.placementRules;
-
     this.renderer = new BootstrapRenderer({ showMessages: true });
     this.validationController.addRenderer(this.renderer);
   }
@@ -250,48 +240,6 @@ export class MatchInputPage {
     return result;
   }
 
-  public addPlacement(gamepiece: DeepSpaceGamepiece = null) {
-    let placement: DeepSpaceEvent = {
-      eventType: "Gamepiece Placement",
-      gamepiece: gamepiece,
-      location: null,
-      sandstorm: false,
-      when: null,
-    };
-    if(this.timerIntervalId != null) {
-      placement.when = this.timeRemaining;
-      placement.sandstorm = this.timeRemainingSandstorm;
-    } else if (this.model.placements.length > 0) {
-      let incTime = 10;
-      if ((this.model.placements[this.model.placements.length - 1].when - incTime) < 1) {
-        placement.when = 1;
-      } else {
-        placement.when = this.model.placements[this.model.placements.length - 1].when - incTime;
-      }
-      if((this.model.placements[this.model.placements.length - 1].when - incTime) < 1 && this.model.placements[this.model.placements.length - 1].sandstorm) {
-        placement.sandstorm = !this.model.placements[this.model.placements.length - 1].sandstorm;
-        placement.when = 135 + (this.model.placements[this.model.placements.length - 1].when - incTime);
-      } else {
-        placement.sandstorm = this.model.placements[this.model.placements.length - 1].sandstorm;
-      }
-    }
-    else if (this.model.placements.length == 0) {
-      placement.when = 10;
-      placement.sandstorm = true;
-    }
-    //This is basically a joke. Good luck making this happen!
-    else {
-      placement.when = Infinity;
-      placement.sandstorm = <any>'FileNotFound';
-      placement.location = <any>"Fifth Dimension";
-      placement.gamepiece = <any>"Cake";
-    }
-    this.model.placements.push(placement);
-  }
-
-  public deleteRow(index: number) {
-    this.model.placements.splice(index, 1);
-  }
 
   public foundIt() {
     this.secret = !this.secret;
@@ -304,16 +252,11 @@ export class MatchInputPage {
 
 
   public validateAll() {
-    let validationPromises = this.model.placements.map(placement => this.validationController.validate({
-      object: placement,
-      rules: this.placementRules
-    }));
-    validationPromises.push(this.validationController.validate({
+    return(this.validationController.validate({
       object: this.model,
       rules: this.rules,
     }));
 
-    return Promise.all(validationPromises);
   }
 
   public async canDeactivate(): Promise<boolean> {
@@ -342,52 +285,23 @@ export class MatchInputPage {
     return true;
   }
 
-  public syncLevel3Entries() {
-    if(!this.model.level3ClimbAttempted) {
-      this.secondsStartTemp = this.model.level3ClimbBegin;
-      this.secondsEndTemp = this.model.level3ClimbEnd;
-      this.level3SucceedTemp = cloneDeep(this.model.level3ClimbSucceeded);
-      this.model.level3ClimbSucceeded = false;
-      this.model.level3ClimbBegin = null;
-      this.model.level3ClimbEnd = null;
+  public syncClimbEntries() {
+    if(!this.model.climbAttempted) {
+      this.secondsStartTemp = this.model.climbBegin;
+      this.secondsEndTemp = this.model.climbEnd;
+      this.level3SucceedTemp = cloneDeep(this.model.climbSucceeded);
+      this.model.climbSucceeded = false;
+      this.model.climbBegin = null;
+      this.model.climbEnd = null;
       //console.log("this.model.level3ClimbBegin is now", this.model.level3ClimbBegin);
       //console.log("this.model.level3ClimbEnd is now", this.model.level3ClimbEnd);
     } else {
-      this.model.level3ClimbBegin = this.secondsStartTemp;
-      this.model.level3ClimbEnd = this.secondsEndTemp;
-      this.model.level3ClimbSucceeded = this.level3SucceedTemp;
+      this.model.climbBegin = this.secondsStartTemp;
+      this.model.climbEnd = this.secondsEndTemp;
+      this.model.climbSucceeded = this.level3SucceedTemp;
       //console.log("this.model.level3ClimbBegin is now", this.model.level3ClimbBegin);
       //console.log("this.model.level3ClimbEnd is now", this.model.level3ClimbEnd);
     }
-  }
-
-  public syncLiftedAndEntries() {
-
-    if (this.model.wasLifted) {
-      this.model.lifted = this.liftedTemp;
-    }
-    else {
-      this.liftedTemp = this.model.lifted;
-      this.model.lifted = [];
-      this.liftedPartner1 = false;
-      this.liftedPartner2 = false;
-      this.model.didLiftLevel3 = false;
-    }
-
-    return true;
-  }
-
-  public syncLiftedBy() {
-
-    if (this.model.liftedBy) {
-      this.model.liftedBy = this.liftedBy;
-    }
-    else {
-      this.liftedBy = this.model.liftedBy;
-      this.model.liftedBy = null;
-    }
-
-    return true;
   }
 
   public syncBoolAndReason2() {
@@ -401,12 +315,6 @@ export class MatchInputPage {
     }
 
     return true;
-  }
-  public wasLiftedReset() {
-  if (!this.model.wasLifted) {
-    this.model.liftedBy = null
-    
-  }
   }
   public hasChanges() {
     let properties = [
@@ -430,43 +338,25 @@ export class MatchInputPage {
       }
     }
   }
-
-    if (this.model.placements.length != this.pristineModel.placements.length) {
-      return true;
-    }
-
-    let placementProperties = ['gamepiece', 'location', 'when', 'sandstorm'];
-    for (var i = 0; i < this.model.placements.length; i++) {
-      for (var j = 0; j < placementProperties.length; j++) {
-        if (!equals(placementProperties[j], this.model.placements[i], this.pristineModel.placements[i])) {
-          return true;
-        }
-      }
-    }
     return false;
   }
 
   public async save() {
     
-    let validationResults = await this.validateAll();
+    let validationResult = await this.validateAll();
     
-    if (validationResults.every(validationResult => validationResult.valid)) {
-      let savedMatches = await this.dbContext.getTeamMatches2019({
+    if(validationResult.valid) {
+      let savedMatches = await this.dbContext.getTeamMatches2020({
         eventCode: this.model.eventCode,
         teamNumber: this.model.teamNumber,
         matchNumber: this.model.matchNumber,
-      });
-      this.model.placements.sort((a, b) => {
-        let aTime = placementTime(a)
-        let bTime = placementTime(b);
-        return bTime - aTime;
       });
       let modelToSave = JSON.parse(JSON.stringify(this.model))
       this.fixupNumericProperties(modelToSave);
       if (savedMatches.length != 0) {
         modelToSave.id = savedMatches[0].id;
       }
-      await this.dbContext.teamMatches2019.put(modelToSave);
+      await this.dbContext.teamMatches2020.put(modelToSave);
       await this.load({
         year: this.event.year,
         eventCode: this.model.eventCode,
@@ -483,8 +373,7 @@ export class MatchInputPage {
       setTimeout(() => {
         this.errorMessage = null;
       }, 3000);
-      console.info(validationResults.filter(v => !v.valid));
-      this.hasSaved = false;
+        this.hasSaved = false;
     }
   }
 
@@ -510,21 +399,7 @@ export class MatchInputPage {
     for (var prop of numericProperties) {
       fixupProperty(model, prop);
     }
-    for (var placement of model.placements) {
-      for (var prop of numericPlacementProperties) {
-        fixupProperty(placement, prop)
-      }
-    }
   }
-  UwU()
-
-  {
-
-      //var str = (<HTMLTextAreaElement>document.getElementById("UwU")).value;
-
-      alert("disappointment");
-
-  }   
   public async gotoMatch(matchNumber: string) {
     let eventCode = this.model.eventCode;
     let year = this.event.year;
@@ -571,9 +446,5 @@ export class MatchInputPage {
     this.timeRemainingSandstorm = true;
     clearInterval(this.timerIntervalId);
     this.timerIntervalId = null;
-  }
-
-  public revalidatePlacement(obj: DeepSpaceEvent) {
-    this.validationController.validate({object: obj, rules: this.placementRules});
   }
 }

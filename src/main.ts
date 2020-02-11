@@ -11,6 +11,7 @@ export function configureWazzis(aurelia: Aurelia) {
     .feature(PLATFORM.moduleName('games/powerup/index'))
     //.feature(PLATFORM.moduleName('games/powerupv2/index'))
     .feature(PLATFORM.moduleName('games/deepspace/index'))
+    .feature(PLATFORM.moduleName('games/recharge/index'))
     .plugin(PLATFORM.moduleName('aurelia-bootstrap'), config => config.options.version = 4)
     .plugin(PLATFORM.moduleName('aurelia-validation'))
     .plugin(PLATFORM.moduleName('aurelia-dialog'))
