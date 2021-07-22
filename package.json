@@ -35,7 +35,7 @@
     "urijs": "^1.19.1",
     "visibilityjs": "^2.0.2",
     "whatwg-fetch": "^2.0.3",
-    "xlsx": "^0.14.1"
+    "xlsx": "^0.17.0"
   },
   "peerDependencies": {},
   "devDependencies": {
